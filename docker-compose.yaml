@@ -1,0 +1,48 @@
+version: '3'
+x-airflow-common:
+  &airflow-common
+  image: apache/airflow:3.1.5
+  environment:
+    - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+    - AIRFLOW__CORE__LOAD_EXAMPLES=False
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./config:/opt/airflow/config
+  user: "${AIRFLOW_UID:-50000}:0"
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+  redis:
+    image: redis:7
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on: [airflow-scheduler, postgres, redis]
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    depends_on: [postgres, redis]
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    depends_on: [airflow-scheduler, postgres, redis]
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+  airflow-api:
+    <<: *airflow-common
+    command: api
+    depends_on: [airflow-scheduler, postgres, redis]
+  airflow-init:
+    <<: *airflow-common
+    command: >
+      bash -c "airflow db init && airflow users create --username admin --password admin --firstname admin --lastname admin --role Admin --email admin@example.com"
+    depends_on: [postgres, redis]
